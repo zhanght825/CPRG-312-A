@@ -1,4 +1,4 @@
-name: Deploy Vue to Vultr
+name: Deploy Vue and Express to Vultr
 
 on:
   push:
@@ -19,21 +19,26 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # 1. Download source code
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      # 2. Setup Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '24'
           cache: 'npm'
 
-      - name: Install Dependencies
+      # 3. Install frontend dependencies
+      - name: Install Frontend Dependencies
         run: npm ci
 
+      # 4. Build Vue
       - name: Build Vue
         run: npm run build
 
+      # 5. Configure SSH
       - name: Setup SSH
         env:
           SSH_KEY: ${{ secrets.VULTR_SSH_KEY }}
@@ -41,12 +46,15 @@ jobs:
         run: |
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
+
           printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
           printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+
           chmod 600 ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/known_hosts
 
-      - name: Deploy to Vultr
+      # 6. Deploy Vue frontend
+      - name: Deploy Frontend
         env:
           HOST: ${{ secrets.VULTR_HOST }}
           USER: ${{ secrets.VULTR_USER }}
@@ -55,3 +63,43 @@ jobs:
             -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes" \
             dist/ \
             "$USER@$HOST:/var/www/html/cprg-312/"
+
+      # 7. Deploy Express backend
+      - name: Deploy Backend
+        env:
+          HOST: ${{ secrets.VULTR_HOST }}
+          USER: ${{ secrets.VULTR_USER }}
+        run: |
+          rsync -avz \
+            --exclude='node_modules/' \
+            --exclude='certs/' \
+            --exclude='.env' \
+            --exclude='.env.*' \
+            --exclude='*.pem' \
+            --exclude='*.key' \
+            -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes" \
+            server/ \
+            "$USER@$HOST:/opt/cprg-312/server/"
+
+      # 8. Install backend dependencies
+      - name: Install Backend Dependencies
+        env:
+          HOST: ${{ secrets.VULTR_HOST }}
+          USER: ${{ secrets.VULTR_USER }}
+        run: |
+          ssh -i ~/.ssh/id_ed25519 \
+            -o StrictHostKeyChecking=yes \
+            "$USER@$HOST" \
+            'cd /opt/cprg-312/server &&
+             PATH=/opt/node24/bin:$PATH /opt/node24/bin/npm ci --omit=dev'
+
+      # 9. Restart Express
+      - name: Restart Express API
+        env:
+          HOST: ${{ secrets.VULTR_HOST }}
+          USER: ${{ secrets.VULTR_USER }}
+        run: |
+          ssh -i ~/.ssh/id_ed25519 \
+            -o StrictHostKeyChecking=yes \
+            "$USER@$HOST" \
+            'sudo -n /usr/bin/systemctl restart cprg312-api.service'
