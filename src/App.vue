@@ -6,6 +6,7 @@ const navigation = [
   { label: 'Skills', path: '/skills' },
   { label: 'Projects', path: '/projects' },
   { label: 'Status', path: '/health' },
+  { label: 'Contact', path: '/contact' },
 ]
 
 const year = new Date().getFullYear()
