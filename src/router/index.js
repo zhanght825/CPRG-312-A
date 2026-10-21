@@ -1,10 +1,10 @@
 import express from 'express'
 import helmet from 'helmet'
 
-import profileRouter from '../views/ProfileView.js'
-import skillsRouter from '../views/SkillsView.js'
-import projectsRouter from '../views/ProjectsView.js'
-import healthRouter from '../views/HealthView.js'
+import profileRouter from '../views/ProfileView.vue'
+import skillsRouter from '../views/SkillsView.vue'
+import projectsRouter from '../views/ProjectsView.vue'
+import healthRouter from '../views/HealthView.vue'
 
 const app = express()
 
