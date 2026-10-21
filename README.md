@@ -1,124 +1,233 @@
-# CPRG-312-A — Phase 1: Secure HTTPS Portfolio API
+# Developer Portfolio and Project Showcase
 
-**Team:** Huitao Zhang and Francheska Agaton  
-**Program:** Web Design & Development  
-**Live Vue page:** https://huitaoz.top/cprg-312/  
-**Portfolio views:** `?name=huitao` and `?name=cheska`  
-**Repository:** https://github.com/zhanght825/CPRG-312-A
+**Course:** CPRG 312  
+**Phase:** 1 — Establishing a Secure HTTPS Server  
+**Team:** Huitao Zhang and Francheska (Cheska) Agaton  
+**Live application:** https://huitaoz.top/cprg-312/
 
-> This is a Phase 1 implementation template. Do not claim HTTPS, Nginx proxying, or test results are complete until you have actually verified them in your environment. Public portraits and sample projects are placeholders.
+## Project Overview
 
-## 1. Assignment scope
+This application is a developer portfolio and project showcase. It presents developer profiles, skills, project information, and public contact details. The frontend uses Vue and Vue Router, while the backend uses Express to provide JSON APIs. A service-status endpoint supports operational checks.
 
-- Part A: Developer Portfolio and Project Showcase with two separate public portfolio views.
-- Part B: Local HTTPS Express server using an OpenSSL self-signed certificate; production HTTPS is terminated by existing Nginx and its trusted certificate.
-- Part C: Express and Helmet HTTP security headers (including Content-Security-Policy and X-Frame-Options).
-- Part D: Five core API routes with explicit cache policies (table below).
-- Part E: Local HTTPS/browser/curl validation and automated API checks.
-- Part F: This README documents decisions, setup, tests, and reflections.
+Phase 1 focuses on HTTPS, security-related HTTP headers, and deliberate caching policies. The backend selects portfolio data using the `name` query parameter, supporting `huitao` and `cheska`. When omitted, the parameter defaults to `huitao`.
 
-## 2. Frontend setup
+## Team Contributions
 
-The `src/` files in this package are an **overlay** for your existing Vue 3 + Vite repository. Keep your existing root `package.json`, `package-lock.json`, `.github/workflows/deploy.yml`, router, and Vite plugins. Follow `INSTALL.md` to add files without deleting your current project settings.
+- **Cheska:** Generated the public and private keys for the backend certificate setup.
+- **Huitao:** Coordinated application integration, frontend troubleshooting, backend route and cache-policy updates, and deployment configuration.
+
+Both team members should review this contribution summary before submission to ensure that it accurately represents their work.
+
+## Technology and Hosting
+
+| Component | Technology or service |
+| --- | --- |
+| Frontend | Vue, Vue Router, Vite |
+| Backend | Node.js, Express |
+| Security headers | Helmet |
+| Cloud hosting | Vultr cloud server |
+| Operating system | Ubuntu 24 |
+| Reverse proxy | Nginx |
+| Domain | huitaoz.top |
+| Domain registrar | NameSilo |
+| Public certificate management | Certbot |
+| Backend certificate generation | OpenSSL |
+| Deployment automation | GitHub Actions |
+
+Nginx routes incoming application requests to the Express backend. The frontend is deployed under `/cprg-312/`. GitHub Actions updates the frontend and backend when the configured deployment workflow is triggered. The workflow stored in `.github/workflows/` is the source of truth for its trigger, commands, and deployment steps.
+
+## Installation and Configuration
+
+### 1. Obtain the project
+
+Clone this GitHub repository using its Code button URL, then open the cloned project folder. Install Git, Node.js compatible with the project dependencies, npm, and OpenSSL. The production server also uses Nginx and Certbot.
+
+### 2. Install dependencies
+
+From the directory containing the frontend package.json:
 
 ```bash
 npm ci
+```
+
+If installing a separate backend package, run `npm ci` in that package directory as well. If no package-lock.json exists, use `npm install` and commit the resulting lockfile.
+
+### 3. Configure the frontend
+
+The production Vite configuration must use the `/cprg-312/` base path. Vue Router should use `createWebHistory(import.meta.env.BASE_URL)`. Register the router with `app.use(router)` before calling `app.mount()`.
+
+```bash
 npm run dev
 npm run build
 ```
 
-Set Vite `base: '/cprg-312/'` for production under a subpath. To call local Express through the Vite dev server, add the Vite proxy in `INSTALL.md`.
+The first command starts frontend development; the second generates production assets in `dist/`. The Vite development server is separate from the Express HTTPS server. API requests must reach Express through the configured development proxy or deployed Nginx mapping.
 
-## 3. Express local HTTPS setup
+### 4. Configure backend HTTPS
 
-Requires Node.js >= 22.18 and OpenSSL. From the project root:
-
-```bash
-cd server
-npm install
-bash generate-local-cert.sh
-npm start
-```
-
-Express HTTPS listens **only on 127.0.0.1:3000**. Open a local browser at `https://localhost:3000/api/profile?name=huitao`. Because the local certificate is self-signed, the browser will warn; this is expected **for local testing only**. Test using:
+Generate a development certificate or use the existing backend certificate configuration. Generate a local self-signed certificate:
 
 ```bash
-curl -k -i 'https://localhost:3000/api/profile?name=huitao'
-curl -k -i 'https://localhost:3000/api/projects?name=cheska'
-curl -k -i 'https://localhost:3000/api/projects/portfolio?name=huitao'
+mkdir -p certs
+openssl req -x509 -newkey rsa:2048 -sha256 -nodes -keyout certs/localhost-key.pem -out certs/localhost-cert.pem -days 30 -subj "/CN=localhost" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
 ```
 
-`-k` disables certificate verification and must **only** be used for this local test. Never commit `server/certs/` or any private keys.
-
-**SSL reflection:** We chose OpenSSL self-signed TLS for isolated Express development because it is reproducible without publishing port 3000 or distributing production private keys. The published website instead uses the existing Nginx HTTPS configuration and a trusted domain certificate. For local HTTPS, we accept the browser warning only in our development environment. Verify the actual production certificate and renewal before claiming they are configured.
-
-## 4. Five routes, cache policies, and security reasons
-
-All URLs accept `name=huitao` or `name=cheska`. Only public, curated information is returned.
-
-| Method & route                   | Purpose                                   | `Cache-Control`                                  | Rationale                                        |
-| -------------------------------- | ----------------------------------------- | ------------------------------------------------ | ------------------------------------------------ |
-| `GET /api/profile?name=...`      | Public bio, display name and introduction | `public, max-age=300`                            | Public content; allow a 5-minute cache           |
-| `GET /api/skills?name=...`       | Skills and focus areas                    | `public, max-age=3600`                           | Changes infrequently; 1-hour cache               |
-| `GET /api/projects?name=...`     | Portfolio project listing                 | `public, max-age=300, stale-while-revalidate=60` | Briefly serve stale public data while refreshing |
-| `GET /api/projects/:id?name=...` | Individual project details                | `public, max-age=300`                            | Public details, refreshed within 5 minutes       |
-| `GET /api/posts?name=...`        | Learning notes / planned posts            | `public, max-age=300`                            | Public editorial data only                       |
-
-There is an additional `GET /api/health` diagnostics endpoint with `Cache-Control: no-store`.
-Invalid names, missing projects, and errors return `no-store` to avoid caching errors. Public caches are **not** suitable for login data, user sessions, private drafts, or contact submissions; add `Cache-Control: no-store` if later phases introduce sensitive responses. Cookie/session authentication belongs to Phase 2.
-
-**Caching reflection:** Longer caching lowers repeated requests but delays updates. Skills can tolerate a 1-hour delay; projects and posts use 5 minutes. `stale-while-revalidate=60` can improve perceived responsiveness when supported by a cache. There is no cache of personal or private information. A request-specific `?name=` query keeps each public portfolio URL distinct.
-
-## 5. Security headers
-
-`server/app.js` uses Helmet for CSP and other security headers. The API uses a restrictive `default-src 'none'` policy because JSON endpoints do not need scripts/styles; `frame-ancestors 'none'` prevents embedding API responses. Helmet also sends `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, and other protections. Helmet's HSTS header is effective when delivered over HTTPS; when a reverse proxy is used, test the final HTTPS response headers as well as the backend.
-
-**Headers reflection:** Security headers reduce common browser-side risks such as clickjacking, MIME-type sniffing, and unintended resource loading. They complement—but do not replace—authorization, input validation and secure cookies in later phases.
-
-## 6. Testing evidence
-
-Run after installing dependencies:
+Configure the backend HTTPS entry point to read the matching private key and certificate and pass the Express application to `https.createServer`. Start the actual backend entry point from its directory; where it is named server.js, use:
 
 ```bash
-cd server && npm test
+node server.js
 ```
 
-Also collect screenshots or terminal output of:
+For the assignment local test, configure the backend to listen on port 3000 and visit `https://localhost:3000`. Use an API path if no root-page handler exists. A local self-signed certificate produces a trust warning unless explicitly trusted. Only accept the known local development certificate.
+
+Certificate paths, listening ports, and production process commands must match the checked-in server configuration and deployment workflow. Keep private keys outside public asset directories and out of Git.
+
+### 5. Deploy
+
+Push changes to the branch used by the existing GitHub Actions workflow. Review the workflow result, then verify the deployed application in the browser. Nginx must route frontend navigation and API requests correctly; an API request must not fall through to the Vue HTML page.
+
+## HTTPS and Certificate Decisions
+
+The public website uses Certbot-managed certificates. The Express backend certificate was generated using OpenSSL, with Cheska responsible for the key pair. Certbot manages certificate issuance and renewal; Nginx and Node.js use certificate files to establish TLS connections.
+
+The browser-to-Nginx connection and the Nginx-to-Express connection are separate connections. An HTTPS website address alone does not prove that the upstream connection uses HTTPS. When forwarding to the HTTPS backend, Nginx must use the matching protocol and port and verify the certificate against the trusted certificate or CA and expected identity.
+
+A domain certificate for `huitaoz.top` does not automatically validate `localhost`. Backend and local certificate names must match the names used by clients. Renewal also requires the consuming services to load the updated certificate.
+
+### Reflection: Why these methods?
+
+We selected Certbot for the public domain because browser trust and manageable certificate renewal are important for a publicly accessible application. We used OpenSSL for the backend certificate to gain practical experience with key generation and HTTPS configuration. This combination lets us explore both public certificate management and application-level TLS setup. A self-signed certificate still supports encryption and has a digital signature, but clients need an explicit basis for trusting its identity. OpenSSL is not limited to self-signed certificates; it can also create signing requests for a CA.
+
+Long certificate validity is not automatically a security advantage. Private-key protection, correct identity validation, renewal, and loading updated certificates are all important parts of the configuration.
+
+## Security Headers
+
+Helmet is registered before the backend routes using `app.use(helmet())`. It adds defensive response headers. Exact values should be read from the installed Helmet version and any explicit overrides.
+
+| Header or policy | Security benefit |
+| --- | --- |
+| Content-Security-Policy | Limits permitted resource sources, reducing opportunities for injected content to execute. |
+| X-Frame-Options and CSP frame-ancestors | Restrict framing and help mitigate clickjacking. |
+| X-Content-Type-Options | Prevents browsers from guessing an unexpected MIME type. |
+| Referrer-Policy | Controls information disclosed in referrer headers. |
+| Strict-Transport-Security, where enabled | Instructs browsers to use HTTPS for subsequent requests during the policy lifetime. |
+
+### Reflection: Why these headers?
+
+TLS protects traffic in transit; headers influence how browsers handle the returned content. A suitable CSP restricts unneeded resource sources, framing restrictions reduce clickjacking risk, and MIME and referrer controls reduce unnecessary exposure. These measures complement input validation and future access controls rather than replacing them.
+
+Helmet only affects responses passing through Express. If Nginx serves frontend HTML directly, appropriate document headers must be configured there as well. CSP attached to a JSON API response does not secure a separate frontend document.
+
+### Reflection: Configuration challenge
+
+An important design issue was distinguishing certificate management from the service actually providing HTTPS. Certbot management at Nginx does not itself configure Express HTTPS. The backend therefore needs its own certificate-loading configuration, and the proxy protocol must agree with the backend listener. A related lesson is to inspect actual responses rather than assume that installing Helmet secures every response produced by both servers.
+
+## API Routes and Cache Policies
+
+The router provides the following five GET endpoints. Paths below assume the router is mounted at `/api`; the public Nginx mapping adds the project prefix where configured.
+
+| Endpoint | Purpose | Cache-Control |
+| --- | --- | --- |
+| `/api/profile?name=huitao` | Developer name and program | `public, max-age=60, must-revalidate` |
+| `/api/contact?name=huitao` | Public email and phone | `public, max-age=60, must-revalidate` |
+| `/api/skills?name=huitao` | Technical skills | `public, max-age=300` |
+| `/api/projects?name=huitao` | Project list and descriptions | `public, max-age=300, stale-while-revalidate=60` |
+| `/api/health` | Basic current API status | `no-store` |
+
+The content endpoints also accept `name=cheska`. An unknown portfolio returns HTTP 404 with `Cache-Control: no-store`. A default no-store policy is set before routes, and successful public-content responses explicitly opt into caching. A final application-level 404 handler should also retain no-store.
+
+The first four endpoints deliver portfolio content. Health is an operational endpoint used by the service-status page; it is not a substitute for authentication or a comprehensive security assessment.
+
+### Reflection: Cache choices and trade-offs
+
+- **Profile:** A 60-second freshness period reduces repeated transfers while allowing changes to appear relatively quickly. After expiry, must-revalidate prohibits using a stale response without successful validation.
+- **Contact:** Contact information also uses a short 60-second period because outdated email or phone details can inconvenience visitors. Only contact data intended for public disclosure belongs in this response.
+- **Skills:** Skills change relatively infrequently, so five minutes of freshness offers a reasonable performance benefit with limited impact from delayed updates.
+- **Projects:** Five minutes of freshness reduces repeated loading. Supporting caches may use the response for another 60 seconds while revalidating in the background. The trade-off is that a visitor may briefly see older project information.
+- **Health:** no-store avoids displaying a stored response as a current service check. The result still only reflects what the health handler actually tests.
+- **404 responses:** no-store avoids retaining an obsolete error when the requested resource later becomes available.
+
+These headers control browser and intermediary caching; they do not create an application database or memory cache. `no-cache` permits storage but requires validation, whereas `no-store` prohibits storage. The frontend need not cache API responses itself for HTTP caching to work.
+
+The `name` query parameter creates distinct request URLs for the two developers. Caches must preserve that distinction. Public cache policies are inappropriate for private, authenticated, or cookie-dependent data. These responses contain only intentionally public portfolio information.
+
+## Testing and Verification
+
+The team reports that the application is working after completing the implementation and resolving frontend issues. The commands below provide reproducible checks; this README does not invent command output, certificate expiry dates, or automated test counts.
+
+### Build and proxy configuration
 
 ```bash
-curl -k -I 'https://localhost:3000/api/profile?name=huitao' # NOTE: HEAD works automatically for GET routes
-curl -k -i 'https://localhost:3000/api/profile?name=other'
-curl -I 'https://huitaoz.top/cprg-312/'
+npm run build
+sudo nginx -t
 ```
 
-Check `Content-Security-Policy`, `X-Frame-Options`, `Cache-Control`, response codes, and the certificate details in the browser. The production `/cprg-312/api/` path is only available after deploying Express and configuring Nginx.
+Confirm successful completion, check the deployed page, and use browser DevTools to verify that JavaScript and CSS load without errors. Refresh nested frontend pages to check the SPA routing configuration.
 
-## 7. Production deployment (separate from existing Vue CI)
+### API and cache headers
 
-The existing GitHub Actions workflow deploys **only Vue `dist/`**. It does not install or restart Express. To expose the API publicly:
+If Nginx maps the API under `/cprg-312/api/`, run:
 
-1. Put the server code in a non-public directory on Vultr, for example `/home/zhanght/CPRG-312-A/server` (not inside `/var/www/html/cprg-312`).
-2. Install server dependencies with `cd server && npm ci` once `server/package-lock.json` is committed.
-3. Run the backend under systemd or another supervisor with `SERVER_MODE=nginx-proxy`, listening only on `127.0.0.1:3001`. An editable service example is included.
-4. Add the location rule from `nginx-location-example.conf` **inside the existing HTTPS virtual host**, check with `sudo nginx -t`, then reload Nginx.
-5. Test `curl -i https://huitaoz.top/cprg-312/api/profile?name=huitao` and check its HTTP headers.
+```bash
+curl -i "https://huitaoz.top/cprg-312/api/profile?name=huitao"
+curl -i "https://huitaoz.top/cprg-312/api/contact?name=cheska"
+curl -i "https://huitaoz.top/cprg-312/api/skills?name=huitao"
+curl -i "https://huitaoz.top/cprg-312/api/projects?name=cheska"
+curl -i "https://huitaoz.top/cprg-312/api/health"
+curl -i "https://huitaoz.top/cprg-312/api/profile?name=missing"
+```
 
-Do not publish port 3001 to the internet. The browser→Nginx connection is encrypted with HTTPS; Nginx→Express uses loopback HTTP on the same server. For an explicit direct-HTTPS Express demonstration, use `https://localhost:3000` mode.
+Check the expected JSON, status codes, and cache policies from the table. Verify that the two developer names select different data. The missing profile should return 404 and no-store. A 200 HTML response at an API URL indicates incorrect routing, not a successful API check.
 
-## 8. Lessons learned / team reflection (complete after testing)
+Inspect security headers on both API responses and the frontend HTML. When investigating browser cache reuse, leave DevTools Disable cache unchecked. The status page uses a fresh request and should not be used to demonstrate public-content cache reuse.
 
-- **Challenge encountered:** [Describe an actual SSL, reverse proxy, Vue base URL or CSP issue.]
-- **Resolution:** [Commands/configuration changes used and their observed results.]
-- **Trade-off:** Public cache improves performance but changes may not appear until the cache expires.
-- **Next phase:** Secure authentication, authorization, session management and `no-store` private responses.
+### Local HTTPS
 
-## 9. References and attribution
+For the example local certificate, test the backend with:
 
-- Express: https://expressjs.com/
-- Helmet: https://helmetjs.github.io/
-- MDN Cache-Control: https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Cache-Control
-- MDN CSP: https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP
+```bash
+curl --cacert certs/localhost-cert.pem -i https://localhost:3000/api/health
+```
+
+Use the actual local certificate path and backend route. Explicit certificate trust checks the certificate instead of bypassing validation. Compare direct backend results with public proxy results to distinguish backend errors from Nginx mapping problems.
+
+### Certificate renewal
+
+```bash
+sudo certbot certificates
+systemctl list-timers --all '*certbot*'
+sudo certbot renew --dry-run
+```
+
+A certificate listing shows managed certificates, not proof of automatic renewal. A timer confirms scheduling, while a successful dry run verifies the renewal procedure under current conditions. Also verify certificate loading after renewal. Ordinary dry runs do not execute deploy hooks by default. These Certbot checks do not renew a separately generated OpenSSL backend certificate.
+
+Retain actual build output, response-header captures, and renewal results as supporting evidence. A working page alone does not establish that all TLS and caching checks passed.
+
+## Lessons Learned
+
+1. **Separate frontend and backend routing.** Vue components must be registered with Vue Router. They cannot be used as Express middleware. Mixing them caused import and build failures.
+2. **Install Vue plugins before mounting.** The router must be registered on the Vue application before mount; otherwise routing components can fail at runtime.
+3. **Inspect copied source files.** Incomplete pasted CSS introduced invalid words and missing braces. Smaller replacements and direct inspection helped locate the errors.
+4. **Keep deployment paths consistent.** Vite, Vue Router, frontend API URLs, and Nginx need compatible paths for deployment under `/cprg-312/`.
+5. **Select data using the correct key.** Contact details are retrieved by portfolio name. An expression such as `portfolios[email, phone]` does not select by two fields; the same name-based lookup should serve profile and contact data.
+6. **Verify configuration at the response level.** Successful deployment and dependency installation are not sufficient evidence of security headers, certificate validation, or cache behavior.
+
+## References and Attribution
+
 - Node.js HTTPS: https://nodejs.org/api/https.html
-- OpenSSL: https://www.openssl.org/
-- Example photos: Unsplash (https://unsplash.com/license); portraits are illustrations and not the named students.
-- AI assistance: [Document any code generation/editing assistance as required by your instructor or SAIT guidance.]
+- Express documentation: https://expressjs.com/
+- Helmet documentation: https://helmetjs.github.io/
+- OpenSSL req: https://docs.openssl.org/master/man1/openssl-req/
+- Certbot user guide: https://eff-certbot.readthedocs.io/en/stable/using.html
+- Nginx proxy module: https://nginx.org/en/docs/http/ngx_http_proxy_module.html
+- MDN Cache-Control: https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Cache-Control
+- Vue Router: https://router.vuejs.org/
+- Vite deployment guide: https://vite.dev/guide/static-deploy
+
+ChatGPT provided the frontend code and assisted with organizing the project documentation.
+
+This documentation is based on the assignment brief, code shared during development, and deployment details reported by the team. Exact commands for the repository layout and production services are defined by the final source and workflow files.
+
+## Submission
+
+Submit the GitHub repository link through Brightspace. Include source code, package manifests and lockfiles, this README, and any supporting verification evidence. Keep private keys, credentials, environment secrets, and node_modules out of the repository.
