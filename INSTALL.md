@@ -3,6 +3,7 @@
 **Do not unzip over your entire repository.** This package contains only the files to add/replace.
 
 ## 1. Copy from this package
+
 - Copy `src/App.vue`, `src/style.css`, and `src/data/portfolios.js` over your existing files.
 - Copy the **entire** `server/` directory into your repository root.
 - Copy `README.md`, `nginx-location-example.conf`, and this `INSTALL.md` into the repo root.
@@ -59,6 +60,7 @@ npm run dev
 ```
 
 Browse the development URL printed by Vite, including its base path, for example:
+
 - `http://localhost:5173/cprg-312/`
 - `http://localhost:5173/cprg-312/?name=huitao`
 - `http://localhost:5173/cprg-312/?name=cheska`

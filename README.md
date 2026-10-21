@@ -56,13 +56,13 @@ curl -k -i 'https://localhost:3000/api/projects/portfolio?name=huitao'
 
 All URLs accept `name=huitao` or `name=cheska`. Only public, curated information is returned.
 
-| Method & route | Purpose | `Cache-Control` | Rationale |
-|---|---|---|---|
-| `GET /api/profile?name=...` | Public bio, display name and introduction | `public, max-age=300` | Public content; allow a 5-minute cache |
-| `GET /api/skills?name=...` | Skills and focus areas | `public, max-age=3600` | Changes infrequently; 1-hour cache |
-| `GET /api/projects?name=...` | Portfolio project listing | `public, max-age=300, stale-while-revalidate=60` | Briefly serve stale public data while refreshing |
-| `GET /api/projects/:id?name=...` | Individual project details | `public, max-age=300` | Public details, refreshed within 5 minutes |
-| `GET /api/posts?name=...` | Learning notes / planned posts | `public, max-age=300` | Public editorial data only |
+| Method & route                   | Purpose                                   | `Cache-Control`                                  | Rationale                                        |
+| -------------------------------- | ----------------------------------------- | ------------------------------------------------ | ------------------------------------------------ |
+| `GET /api/profile?name=...`      | Public bio, display name and introduction | `public, max-age=300`                            | Public content; allow a 5-minute cache           |
+| `GET /api/skills?name=...`       | Skills and focus areas                    | `public, max-age=3600`                           | Changes infrequently; 1-hour cache               |
+| `GET /api/projects?name=...`     | Portfolio project listing                 | `public, max-age=300, stale-while-revalidate=60` | Briefly serve stale public data while refreshing |
+| `GET /api/projects/:id?name=...` | Individual project details                | `public, max-age=300`                            | Public details, refreshed within 5 minutes       |
+| `GET /api/posts?name=...`        | Learning notes / planned posts            | `public, max-age=300`                            | Public editorial data only                       |
 
 There is an additional `GET /api/health` diagnostics endpoint with `Cache-Control: no-store`.
 Invalid names, missing projects, and errors return `no-store` to avoid caching errors. Public caches are **not** suitable for login data, user sessions, private drafts, or contact submissions; add `Cache-Control: no-store` if later phases introduce sensitive responses. Cookie/session authentication belongs to Phase 2.

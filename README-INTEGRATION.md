@@ -36,6 +36,7 @@ git push origin master
 ## Edit the content later
 
 All public content is configured in `src/data/portfolios.js` under `profiles.huitao` and `profiles.cheska`:
+
 - `name`, `intro`, `bio`, `headline`, `portrait` and `focus` control each person's separate view.
 - `projects` and `notes` are completely separate arrays for each person.
 - Example projects and planned articles are clearly marked. Replace samples with completed work.

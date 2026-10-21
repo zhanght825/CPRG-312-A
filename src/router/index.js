@@ -6,30 +6,30 @@ import ProjectsView from '../views/ProjectsView.vue'
 import HealthView from '../views/HealthView.vue'
 
 const router = createRouter({
-	history: createWebHistory(import.meta.env.BASE_URL),
+  history: createWebHistory(import.meta.env.BASE_URL),
 
-	routes: [
-		{
-			path: '/',
-			redirect: '/profile'
-		},
-		{
-			path: '/profile',
-			component: ProfileView
-		},
-		{
-			path: '/skills',
-			component: SkillsView
-		},
-		{
-			path: '/projects',
-			component: ProjectsView
-		},
-		{
-			path: '/health',
-			component: HealthView
-		}
-	]
+  routes: [
+    {
+      path: '/',
+      redirect: '/profile',
+    },
+    {
+      path: '/profile',
+      component: ProfileView,
+    },
+    {
+      path: '/skills',
+      component: SkillsView,
+    },
+    {
+      path: '/projects',
+      component: ProjectsView,
+    },
+    {
+      path: '/health',
+      component: HealthView,
+    },
+  ],
 })
 
 export default router
