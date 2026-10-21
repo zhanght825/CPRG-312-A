@@ -1,27 +1,35 @@
-import express from 'express'
-import helmet from 'helmet'
+import { createRouter, createWebHistory } from 'vue-router'
 
-import profileRouter from '../views/ProfileView.vue'
-import skillsRouter from '../views/SkillsView.vue'
-import projectsRouter from '../views/ProjectsView.vue'
-import healthRouter from '../views/HealthView.vue'
+import ProfileView from '../views/ProfileView.vue'
+import SkillsView from '../views/SkillsView.vue'
+import ProjectsView from '../views/ProjectsView.vue'
+import HealthView from '../views/HealthView.vue'
 
-const app = express()
+const router = createRouter({
+	history: createWebHistory(import.meta.env.BASE_URL),
 
-app.use(helmet())
-app.use(express.json())
-
-// Register routes
-app.use('/api/profile', profileRouter)
-app.use('/api/skills', skillsRouter)
-app.use('/api/projects', projectsRouter)
-app.use('/api/health', healthRouter)
-
-// 404 handler
-app.use((req, res) => {
-	res.status(404).json({
-		error: 'Route not found'
-	})
+	routes: [
+		{
+			path: '/',
+			redirect: '/profile'
+		},
+		{
+			path: '/profile',
+			component: ProfileView
+		},
+		{
+			path: '/skills',
+			component: SkillsView
+		},
+		{
+			path: '/projects',
+			component: ProjectsView
+		},
+		{
+			path: '/health',
+			component: HealthView
+		}
+	]
 })
 
-export { app }
+export default router
