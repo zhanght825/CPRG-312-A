@@ -14,8 +14,8 @@ const portfolioRoutes = require('./routes/portfolio');
 const contactRoutes = require('./routes/contact');
 
 const app = express();
-const PORT = Number(process.env.PORT || 3002);
-const BASE = process.env.APP_BASE_PATH || '/cprg-312';
+const PORT = Number(process.env.PORT || 3000);
+//const BASE = process.env.APP_BASE_PATH || '/cprg-312';
 const prod = process.env.NODE_ENV === 'production';
 
 app.disable('x-powered-by');
