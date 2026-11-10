@@ -1,124 +1,175 @@
-import { Router } from 'express'
+const express = require('express');
+const mongoose = require('mongoose');
+const Portfolio = require('../models/Portfolio');
+const Skill = require('../models/Skill');
+const Project = require('../models/Project');
+const { ensureAuthenticated } = require('../middlewares/auth');
 
-const router = Router()
+const router = express.Router();
 
-router.use((req, res, next) => {
-	  res.set('Cache-Control', 'no-store')
-	  next()
-})
+// Users can only access their own portfolio data.
+router.use(ensureAuthenticated);
 
-// Portfolio data
-const portfolios = {
-  huitao: {
-    name: 'Huitao Zhang',
-	  email: 'zhanghuitao123@gmail.com',
-	  phone: '5879665572',
-    program: 'Web Design & Development',
-    skills: ['HTML', 'CSS', 'JavaScript', 'Vue 3'],
-    projects: [
-      {
-        id: 1,
-        title: 'Portfolio Website',
-        description: 'Personal portfolio built with Vue 3',
-      },
-      {
-        id: 2,
-        title: 'Web Security Project',
-        description: 'Secure web application using Express',
-      },
-    ],
-  },
-
-  cheska: {
-    name: 'Francheska Agaton',
-	  email: 'cheska@gmail.com',
-	  phone: '5879665573',
-    program: 'Web Design & Development',
-    skills: ['HTML', 'CSS', 'JavaScript', 'UI Design'],
-    projects: [
-      {
-        id: 1,
-        title: 'Portfolio Website',
-        description: 'Personal portfolio project',
-      },
-    ],
-  },
+function pickFields(body, fields) {
+    const data = {};
+    for (const field of fields) {
+        if (body && Object.prototype.hasOwnProperty.call(body, field)) {
+            data[field] = body[field];
+        }
+    }
+    return data;
 }
 
-// Helper function
-function getPortfolio(req) {
-  const name = String(req.query.name || 'huitao').toLowerCase()
-
-  return portfolios[name]
+function checkId(req, res, next) {
+    if (!mongoose.isObjectIdOrHexString(req.params.id)) {
+        return res.status(400).json({ message: 'Invalid ID' });
+    }
+    next();
 }
 
-router.get('/contact', (req, res) => {
-	  const portfolio = getPortfolio(req)
+const profileFields = [
+    'name', 'title', 'bio', 'location', 'website', 'github', 'linkedin'
+];
+const skillFields = ['name', 'category', 'level', 'description', 'order'];
+const projectFields = [
+    'title', 'description', 'technologies',
+    'image', 'github', 'demo', 'featured', 'order'
+];
 
-	  if (!portfolio) {
-		      return res.status(404).set('Cache-Control', 'no-store').json({
-			            error: 'Profile not found',
-			          })
-		    }
+// Get my profile
+router.get('/profile', async (req, res, next) => {
+    try {
+        const profile = await Portfolio.findOne({ owner: req.user._id });
+        res.json(profile || {});
+    } catch (err) {
+        next(err);
+    }
+});
 
-	  res.set('Cache-Control', 'public, max-age=60, must-revalidate').json({
-		      email: portfolio.email,
-		      phone: portfolio.phone,
-		    })
-})
+// Create or update my profile
+router.put('/profile', async (req, res, next) => {
+    try {
+        const data = pickFields(req.body, profileFields);
+        const exists = await Portfolio.exists({ owner: req.user._id });
+        if (!exists && (typeof data.name !== 'string' || !data.name.trim())) {
+            return res.status(400).json({ message: 'Name is required' });
+        }
 
-// Route 1: Profile
-router.get('/profile', (req, res) => {
-  const portfolio = getPortfolio(req)
+        const profile = await Portfolio.findOneAndUpdate(
+            { owner: req.user._id },
+            { $set: data, $setOnInsert: { owner: req.user._id } },
+            { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true }
+        );
+        res.json(profile);
+    } catch (err) {
+        next(err);
+    }
+});
 
-  if (!portfolio) {
-    return res.status(404).set('Cache-Control', 'no-store').json({
-      error: 'Profile not found',
-    })
-  }
+// Get my skills
+router.get('/skills', async (req, res, next) => {
+    try {
+        const skills = await Skill.find({ owner: req.user._id })
+            .sort({ order: 1, name: 1 });
+        res.json(skills);
+    } catch (err) {
+        next(err);
+    }
+});
 
-  res.set('Cache-Control', 'public, max-age=60, must-revalidate').json({
-    name: portfolio.name,
-    program: portfolio.program,
-  })
-})
+// Create my skill
+router.post('/skills', async (req, res, next) => {
+    try {
+        const skill = await Skill.create({
+            ...pickFields(req.body, skillFields),
+            owner: req.user._id
+        });
+        res.status(201).json(skill);
+    } catch (err) {
+        next(err);
+    }
+});
 
-// Route 2: Skills
-router.get('/skills', (req, res) => {
-  const portfolio = getPortfolio(req)
+// Update my skill
+router.put('/skills/:id', checkId, async (req, res, next) => {
+    try {
+        const skill = await Skill.findOneAndUpdate(
+            { _id: req.params.id, owner: req.user._id },
+            { $set: pickFields(req.body, skillFields) },
+            { new: true, runValidators: true }
+        );
+        if (!skill) return res.status(404).json({ message: 'Skill not found' });
+        res.json(skill);
+    } catch (err) {
+        next(err);
+    }
+});
 
-  if (!portfolio) {
-    return res.status(404).set('Cache-Control', 'no-store').json({
-      error: 'Profile not found',
-    })
-  }
+// Delete my skill
+router.delete('/skills/:id', checkId, async (req, res, next) => {
+    try {
+        const skill = await Skill.findOneAndDelete({
+            _id: req.params.id,
+            owner: req.user._id
+        });
+        if (!skill) return res.status(404).json({ message: 'Skill not found' });
+        res.json({ message: 'Skill deleted' });
+    } catch (err) {
+        next(err);
+    }
+});
 
-  res.set('Cache-Control', 'public, max-age=300, must-revalidate').json({
-    skills: portfolio.skills,
-  })
-})
+// Get my projects
+router.get('/projects', async (req, res, next) => {
+    try {
+        const projects = await Project.find({ owner: req.user._id })
+            .sort({ order: 1, createdAt: -1 });
+        res.json(projects);
+    } catch (err) {
+        next(err);
+    }
+});
 
-// Route 3: Projects
-router.get('/projects', (req, res) => {
-  const portfolio = getPortfolio(req)
+// Create my project
+router.post('/projects', async (req, res, next) => {
+    try {
+        const project = await Project.create({
+            ...pickFields(req.body, projectFields),
+            owner: req.user._id
+        });
+        res.status(201).json(project);
+    } catch (err) {
+        next(err);
+    }
+});
 
-  if (!portfolio) {
-    return res.status(404).set('Cache-Control', 'no-store').json({
-      error: 'Profile not found',
-    })
-  }
+// Update my project
+router.put('/projects/:id', checkId, async (req, res, next) => {
+    try {
+        const project = await Project.findOneAndUpdate(
+            { _id: req.params.id, owner: req.user._id },
+            { $set: pickFields(req.body, projectFields) },
+            { new: true, runValidators: true }
+        );
+        if (!project) return res.status(404).json({ message: 'Project not found' });
+        res.json(project);
+    } catch (err) {
+        next(err);
+    }
+});
 
-  res.set('Cache-Control', 'public, max-age=300, must-revalidate').json({
-    projects: portfolio.projects,
-  })
-})
+// Delete my project
+router.delete('/projects/:id', checkId, async (req, res, next) => {
+    try {
+        const project = await Project.findOneAndDelete({
+            _id: req.params.id,
+            owner: req.user._id
+        });
+        if (!project) return res.status(404).json({ message: 'Project not found' });
+        res.json({ message: 'Project deleted' });
+    } catch (err) {
+        next(err);
+    }
+});
 
-// Route 4: Health check
-router.get('/health', (req, res) => {
-  res.set('Cache-Control', 'public, max-age=60, must-revalidate').json({
-    status: 'ok',
-    message: 'CPRG-312 API is running',
-  })
-})
-
-export default router
+module.exports = router;

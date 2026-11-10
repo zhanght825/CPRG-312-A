@@ -4,14 +4,15 @@ const User = require('../models/User');
 async function ensureAuthenticated(req, res, next) {
     try {
         const authHeader = req.headers.authorization;
+        const token = req.cookies?.accessToken ||
+            (authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null);
 
-        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        if (!token) {
             return res.status(401).json({
                 message: 'Authentication required'
             });
         }
 
-        const token = authHeader.split(' ')[1];
 
         const decoded = jwt.verify(
             token,

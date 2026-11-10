@@ -27,7 +27,15 @@ const userSchema = new mongoose.Schema({
         type: String,
         enum: ['user', 'admin'],
         default: 'user'
-    }
+    },
+    failedLoginAttempts: {
+    type: Number,
+    default: 0
+},
+lockedUntil: {
+    type: Date,
+    default: null
+}
 }, {
     timestamps: true
 });

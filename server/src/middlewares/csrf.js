@@ -1,38 +1,16 @@
-
 const crypto = require('crypto');
-
 function csrfProtection(req, res, next) {
-    const safeMethods = ['GET', 'HEAD', 'OPTIONS'];
-
-    if (safeMethods.includes(req.method)) {
-        return next();
+    if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
+    const stored = req.session?.csrfToken;
+    const sent = req.get('x-csrf-token');
+    if (typeof stored !== 'string' || typeof sent !== 'string') {
+        return res.status(403).json({ message: 'Invalid CSRF token' });
     }
-
-    const sessionToken = req.session?.csrfToken;
-    const requestToken = req.headers['x-csrf-token'];
-
-    if (
-        typeof sessionToken !== 'string' ||
-        typeof requestToken !== 'string'
-    ) {
-        return res.status(403).json({
-            message: 'Invalid CSRF token'
-        });
+    const a = Buffer.from(stored);
+    const b = Buffer.from(sent);
+    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+        return res.status(403).json({ message: 'Invalid CSRF token' });
     }
-
-    const expected = Buffer.from(sessionToken, 'utf8');
-    const received = Buffer.from(requestToken, 'utf8');
-
-    if (
-        expected.length !== received.length ||
-        !crypto.timingSafeEqual(expected, received)
-    ) {
-        return res.status(403).json({
-            message: 'Invalid CSRF token'
-        });
-    }
-
     next();
 }
-
 module.exports = csrfProtection;

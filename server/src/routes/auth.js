@@ -1,314 +1,132 @@
 const express = require('express');
-const argon2 = require('argon2');
-const User = require('../models/User');
-
-const router = express.Router();
 const crypto = require('crypto');
-const RefreshToken = require('../models/RefreshToken');
+const argon2 = require('argon2');
 const passport = require('passport');
-const {
-    createAccessToken,
-    createRefreshToken,
-    hashToken,
-    setAuthCookies,
-    clearAuthCookies
-} = require('../utils/tokens');
-
-// Register a new user
-router.post('/register', async (req, res) => {
+const { rateLimit } = require('express-rate-limit');
+const User = require('../models/User');
+const RefreshToken = require('../models/RefreshToken');
+const { createAccessToken, createRefreshToken, hashToken, setAuthCookies, clearAuthCookies } = require('../utils/tokens');
+const router = express.Router();
+const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 20,
+    standardHeaders: 'draft-8', legacyHeaders: false,
+    message: { message: 'Too many attempts; try again later' } });
+const registerLimiter = rateLimit({ windowMs: 60 * 60 * 1000, limit: 10,
+    standardHeaders: 'draft-8', legacyHeaders: false });
+const BASE = process.env.APP_BASE_PATH || '/cprg-312';
+function publicUser(user) {
+    return { id: String(user._id), username: user.username, email: user.email, role: user.role };
+}
+function regenerate(req) {
+    return new Promise((resolve, reject) => req.session.regenerate(err => err ? reject(err) : resolve()));
+}
+function saveSession(req) {
+    return new Promise((resolve, reject) => req.session.save(err => err ? reject(err) : resolve()));
+}
+async function establishLogin(req, res, user) {
+    await regenerate(req); // Prevent session fixation
+    req.session.csrfToken = crypto.randomBytes(32).toString('hex');
+    await saveSession(req);
+    const accessToken = createAccessToken(user);
+    const refreshToken = await createRefreshToken(user);
+    setAuthCookies(res, accessToken, refreshToken);
+    return { user: publicUser(user), csrfToken: req.session.csrfToken };
+}
+router.get('/csrf', (req, res) => {
+    if (!req.session.csrfToken) req.session.csrfToken = crypto.randomBytes(32).toString('hex');
+    res.json({ csrfToken: req.session.csrfToken });
+});
+router.post('/register', registerLimiter, async (req, res, next) => {
     try {
-        const { username, email, password } = req.body;
-
-        if (!username || !email || !password) {
-            return res.status(400).json({
-                message: 'All fields are required'
-            });
+        const { username, email, password } = req.body || {};
+        if (typeof username !== 'string' || typeof email !== 'string' || typeof password !== 'string' ||
+            username.trim().length < 3 || username.trim().length > 50 ||
+            !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || password.length < 8 ||
+            Buffer.byteLength(password, 'utf8') > 1024) {
+            return res.status(400).json({ message: 'Check username, email and password (8+ characters)' });
         }
-
-        if (
-            typeof username !== 'string' ||
-            typeof email !== 'string' ||
-            typeof password !== 'string' ||
-            username.trim().length < 3 ||
-            username.trim().length > 50 ||
-            !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
-            password.length < 8 ||
-            Buffer.byteLength(password, 'utf8') > 1024
-        ) {
-            return res.status(400).json({
-                message: 'Invalid registration information'
-            });
+        const safeUsername = username.trim();
+        const safeEmail = email.trim().toLowerCase();
+        const passwordHash = await argon2.hash(password, { type: argon2.argon2id });
+        const user = await User.create({ username: safeUsername, email: safeEmail,
+            password: passwordHash, role: 'user' });
+        res.status(201).json({ message: 'Account created', user: publicUser(user) });
+    } catch (err) { next(err); }
+});
+router.post('/login', loginLimiter, async (req, res, next) => {
+    try {
+        const { email, password } = req.body || {};
+        if (typeof email !== 'string' || typeof password !== 'string' || !email.trim() || !password) {
+            return res.status(400).json({ message: 'Email and password required' });
         }
-
-        const existingUser = await User.findOne({
-            $or: [
-                { username: username.trim() },
-                { email: email.trim().toLowerCase() }
-            ]
-        });
-
-        if (existingUser) {
-            return res.status(409).json({
-                message: 'Username or email is already registered'
-            });
+        const user = await User.findOne({ email: email.trim().toLowerCase() });
+        // Do not reveal whether an email address exists.
+        if (!user || !user.password) return res.status(401).json({ message: 'Invalid email or password' });
+        if (user.lockedUntil && user.lockedUntil > new Date()) {
+            return res.status(429).json({ message: 'Too many attempts. Please try again later.' });
         }
-
-        // Hash password before saving
-        const hashedPassword = await argon2.hash(password, {
-            type: argon2.argon2id
-        });
-
-        const user = new User({
-            username: username.trim(),
-            email: email.trim().toLowerCase(),
-            password: hashedPassword,
-            role: 'user'
-        });
-
-        await user.save();
-
-        res.status(201).json({
-            message: 'User registered successfully',
-            user: {
-                id: user._id,
-                username: user.username,
-                email: user.email,
-                role: user.role
+        const valid = await argon2.verify(user.password, password);
+        if (!valid) {
+            // Atomic counter avoids lost updates under simultaneous login attempts.
+            const updated = await User.findByIdAndUpdate(user._id, { $inc: { failedLoginAttempts: 1 } }, { new: true });
+            if (updated.failedLoginAttempts >= 5) {
+                await User.updateOne({ _id: user._id }, { $set: {
+                    lockedUntil: new Date(Date.now() + 15 * 60 * 1000), failedLoginAttempts: 0 } });
             }
-        });
-
-    } catch (err) {
-        console.error('Registration error:', err);
-
-        if (err.code === 11000) {
-            return res.status(409).json({
-                message: 'Username or email is already registered'
-            });
+            return res.status(401).json({ message: 'Invalid email or password' });
         }
-
-        res.status(500).json({
-            message: 'Server error'
-        });
-    }
+        await User.updateOne({ _id: user._id }, { $set: { failedLoginAttempts: 0, lockedUntil: null } });
+        const data = await establishLogin(req, res, user);
+        res.json({ message: 'Login successful', ...data });
+    } catch (err) { next(err); }
 });
-
-// Login with email and password
-router.post('/login', async (req, res) => {
+router.post('/refresh', async (req, res, next) => {
     try {
-        const { email, password } = req.body;
-
-        if (
-            typeof email !== 'string' ||
-            typeof password !== 'string' ||
-            !email.trim() ||
-            !password
-        ) {
-            return res.status(400).json({
-                message: 'Email and password are required'
-            });
-        }
-
-        // Find user by email
-        const user = await User.findOne({
-            email: email.trim().toLowerCase()
-        });
-
-        // Verify password
-        if (!user || !user.password) {
-            return res.status(401).json({
-                message: 'Invalid email or password'
-            });
-        }
-
-        const isValid = await argon2.verify(
-            user.password,
-            password
-        );
-
-        if (!isValid) {
-            return res.status(401).json({
-                message: 'Invalid email or password'
-            });
-        }
-
-
-// Generate access and refresh tokens
-const accessToken = createAccessToken(user);
-const refreshToken = await createRefreshToken(user);
-
-// Save tokens in HttpOnly cookies
-setAuthCookies(res, accessToken, refreshToken);
-
-res.status(200).json({
-    message: 'Login successful',
-    user: {
-        id: user._id,
-        username: user.username,
-        email: user.email,
-        role: user.role
-    }
-});
-
-
-    } catch (err) {
-        console.error('Login error:', err);
-
-        res.status(500).json({
-            message: 'Server error'
-        });
-    }
-});
-
-
-// Refresh access token
-router.post('/refresh', async (req, res) => {
-    try {
-        const token = req.cookies.refreshToken;
-
-        if (!token) {
-            return res.status(401).json({
-                message: 'Refresh token required'
-            });
-        }
-
+        const token = req.cookies?.refreshToken;
+        if (!token) return res.status(401).json({ message: 'Login required' });
         const oldToken = await RefreshToken.findOneAndDelete({
-            tokenHash: hashToken(token),
-            expiresAt: { $gt: new Date() }
+            tokenHash: hashToken(token), expiresAt: { $gt: new Date() }
         });
-
         if (!oldToken) {
             clearAuthCookies(res);
-
-            return res.status(401).json({
-                message: 'Invalid or expired refresh token'
-            });
+            return res.status(401).json({ message: 'Refresh token expired or already used' });
         }
-
         const user = await User.findById(oldToken.user);
-
         if (!user) {
             clearAuthCookies(res);
-
-            return res.status(401).json({
-                message: 'User not found'
-            });
+            return res.status(401).json({ message: 'Login required' });
         }
-
-        // Create a new token pair
         const accessToken = createAccessToken(user);
         const refreshToken = await createRefreshToken(user);
-
         setAuthCookies(res, accessToken, refreshToken);
-
-        res.json({
-            message: 'Token refreshed successfully'
-        });
-
-    } catch (err) {
-        console.error('Refresh token error:', err);
-
-        res.status(500).json({
-            message: 'Server error'
-        });
-    }
+        res.json({ message: 'Tokens refreshed', user: publicUser(user) });
+    } catch (err) { next(err); }
 });
-
-
-// Logout
-router.post('/logout', async (req, res) => {
+router.post('/logout', async (req, res, next) => {
     try {
-        const token = req.cookies.refreshToken;
-
-        if (token) {
-            await RefreshToken.deleteOne({
-                tokenHash: hashToken(token)
-            });
-        }
-
+        const token = req.cookies?.refreshToken;
+        if (token) await RefreshToken.deleteOne({ tokenHash: hashToken(token) });
+        if (req.session) await new Promise((resolve, reject) => req.session.destroy(err => err ? reject(err) : resolve()));
         clearAuthCookies(res);
-
-        res.json({
-            message: 'Logout successful'
+        res.clearCookie('portfolio.sid', {
+            path: process.env.NODE_ENV === 'production' ? BASE + '/' : '/',
+            httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax'
         });
-
-    } catch (err) {
-        console.error('Logout error:', err);
-
-        res.status(500).json({
-            message: 'Server error'
-        });
-    }
+        res.json({ message: 'Logged out' });
+    } catch (err) { next(err); }
 });
-
-// Get CSRF token
-router.get('/csrf', (req, res) => {
-    if (!req.session.csrfToken) {
-        req.session.csrfToken = crypto.randomBytes(32).toString('hex');
-    }
-
-    res.json({
-        csrfToken: req.session.csrfToken
-    });
+router.get('/google', loginLimiter, (req, res, next) => {
+    if (!passport._strategy('google')) return res.status(503).json({ message: 'Google sign-in is not configured' });
+    passport.authenticate('google', { scope: ['profile', 'email'] })(req, res, next);
 });
-
-
-// Login with Google
-router.get('/google',
-    passport.authenticate('google', {
-        scope: ['profile', 'email']
-    })
-);
-
-// Google OAuth callback
 router.get('/google/callback', (req, res, next) => {
-    passport.authenticate('google', {
-        session: false
-    }, async (err, user) => {
-        if (err) {
-            return next(err);
-        }
-
-        if (!user) {
-            return res.redirect('/cprg-312/login?error=google');
-        }
-
+    if (!passport._strategy('google')) return res.status(503).json({ message: 'Google sign-in is not configured' });
+    passport.authenticate('google', { session: false }, async (err, user) => {
+        if (err) return next(err);
+        if (!user) return res.redirect(BASE + '/login?error=google');
         try {
-            // Regenerate session ID after successful login
-            req.session.regenerate(async (sessionErr) => {
-                if (sessionErr) {
-                    return next(sessionErr);
-                }
-
-                try {
-                    // Create a new CSRF token
-                    req.session.csrfToken =
-                        crypto.randomBytes(32).toString('hex');
-
-                    await new Promise((resolve, reject) => {
-                        req.session.save(saveErr => {
-                            if (saveErr) reject(saveErr);
-                            else resolve();
-                        });
-                    });
-
-                    // Generate JWT and refresh token
-                    const accessToken = createAccessToken(user);
-                    const refreshToken = await createRefreshToken(user);
-
-                    setAuthCookies(res, accessToken, refreshToken);
-
-                    res.redirect('/cprg-312/dashboard');
-
-                } catch (error) {
-                    next(error);
-                }
-            });
-
-        } catch (error) {
-            next(error);
-        }
+            await establishLogin(req, res, user);
+            res.redirect(BASE + '/dashboard');
+        } catch (error) { next(error); }
     })(req, res, next);
 });
-
-
 module.exports = router;
