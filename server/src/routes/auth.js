@@ -125,7 +125,7 @@ router.get('/google/callback', (req, res, next) => {
         if (!user) return res.redirect(BASE + '/login?error=google');
         try {
             await establishLogin(req, res, user);
-            res.redirect(BASE + '/dashboard');
+            res.redirect(BASE + '/');
         } catch (error) { next(error); }
     })(req, res, next);
 });

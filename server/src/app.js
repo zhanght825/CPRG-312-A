@@ -38,7 +38,7 @@ app.use(session({
         secure: prod,
         sameSite: 'lax',
         maxAge: 15 * 60 * 1000,
-        path: prod ? BASE + '/' : '/'
+        path: '/'
     }
 }));
 app.use(passport.initialize());
