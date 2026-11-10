@@ -1,149 +1,18 @@
 <script setup>
-import { onMounted, ref } from 'vue'
-
-const contact = ref(null)
-const loading = ref(false)
+import { onMounted, reactive, ref } from 'vue'
+import { api, json } from '../lib/api'
+const form = reactive({ subject:'', message:'' })
+const messages = ref([])
 const error = ref('')
-const endpoint = `${import.meta.env.BASE_URL}api/contact`
-
-async function loadContact() {
-  if (loading.value) return
-  loading.value = true
-  error.value = ''
-  try {
-    const response = await fetch(endpoint, {
-      headers: { Accept: 'application/json' },
-    })
-    if (!response.ok) throw new Error('Request failed.')
-    const data = await response.json()
-    if (typeof data.email !== 'string' || typeof data.phone !== 'string') {
-      throw new Error('Invalid contact data.')
-    }
-    contact.value = { email: data.email, phone: data.phone }
-  } catch {
-    error.value = 'Unable to load contact details. Please try again.'
-  } finally {
-    loading.value = false
-  }
-}
-
-onMounted(loadContact)
+const notice = ref('')
+async function load() { try { messages.value=await api('/contact/messages') } catch(err) { error.value=err.message } }
+async function save() { error.value=''; notice.value=''; try { await json('POST','/contact/messages',{...form}); form.subject=''; form.message='';notice.value='Note saved.';await load() } catch(err){error.value=err.message} }
+onMounted(load)
 </script>
-
 <template>
-  <section class="contact">
-    <p class="label">GET IN TOUCH</p>
-    <h1>Let's start<br /><span>a conversation.</span></h1>
-    <p class="intro">For project ideas, questions, and collaboration.</p>
-
-    <p v-if="loading" role="status">Loading contact details…</p>
-    <div v-else-if="error" role="alert">
-      <p>{{ error }}</p>
-      <button type="button" @click="loadContact">Try again</button>
-    </div>
-
-    <div v-else-if="contact" class="grid">
-      <article>
-        <span class="icon" aria-hidden="true">@</span>
-        <h2>Email</h2>
-        <p>Send me a message.</p>
-        <a :href="'mailto:' + encodeURIComponent(contact.email)">
-          {{ contact.email }}
-        </a>
-      </article>
-      <article>
-        <span class="icon" aria-hidden="true">☎</span>
-        <h2>Phone</h2>
-        <p>Get in touch by phone.</p>
-        <a :href="'tel:' + contact.phone.replace(/[^+\d]/g, '')">
-          {{ contact.phone }}
-        </a>
-      </article>
-    </div>
-  </section>
+  <div class="stack"><header><p class="eyebrow">GET IN TOUCH</p><h1 class="page-title">Let's start<br />a conversation.</h1><p class="muted">For project ideas, questions, and collaboration. This page also keeps your private notes in MongoDB.</p></header>
+    <section class="panel"><h2>New note</h2><form @submit.prevent="save"><div class="field"><label for="subject">Subject</label><input id="subject" v-model="form.subject" maxlength="200" required /></div><div class="field"><label for="message">Message</label><textarea id="message" v-model="form.message" maxlength="5000" required /></div><p v-if="error" class="error">{{ error }}</p><p v-if="notice" class="success">{{ notice }}</p><button class="btn">Save note</button></form></section>
+    <section class="panel"><h2>My notes</h2><p v-if="messages.length === 0" class="muted">No notes yet.</p><article v-for="msg in messages" :key="msg._id" class="note"><h3>{{ msg.subject }}</h3><p>{{ msg.message }}</p><small>{{ new Date(msg.createdAt).toLocaleString() }}</small></article></section>
+  </div>
 </template>
-
-<style scoped>
-.contact {
-  color: #182238;
-}
-.label {
-  color: #6547ce;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.15em;
-}
-h1 {
-  margin: 20px 0;
-  font-size: clamp(36px, 5vw, 60px);
-  line-height: 1.12;
-  letter-spacing: -0.05em;
-}
-h1 span {
-  color: #6547ce;
-}
-.intro {
-  color: #606b80;
-  line-height: 1.85;
-}
-.grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 20px;
-  margin-top: 36px;
-}
-article {
-  min-width: 0;
-  padding: 30px;
-  border: 1px solid #e2e6ef;
-  border-radius: 16px;
-  background: white;
-}
-.icon {
-  display: grid;
-  place-items: center;
-  width: 46px;
-  height: 46px;
-  border-radius: 12px;
-  color: #6547ce;
-  background: #efebfc;
-  font-size: 24px;
-}
-h2 {
-  margin: 22px 0 12px;
-  font-size: 23px;
-}
-article p {
-  color: #606b80;
-  font-size: 14px;
-}
-a {
-  display: inline-block;
-  padding-block: 10px;
-  color: #6547ce;
-  overflow-wrap: anywhere;
-  text-underline-offset: 4px;
-}
-button {
-  padding: 12px 18px;
-  border: 0;
-  border-radius: 8px;
-  background: #6547ce;
-  color: white;
-  font: inherit;
-  cursor: pointer;
-}
-button:hover {
-  background: #5236b3;
-}
-a:focus-visible,
-button:focus-visible {
-  outline: 3px solid #6547ce;
-  outline-offset: 4px;
-}
-@media (max-width: 650px) {
-  .grid {
-    grid-template-columns: 1fr;
-  }
-}
-</style>
+<style scoped>.note{padding:17px 0;border-bottom:1px solid #e2e6ef}.note p{white-space:pre-wrap;color:#606b80}</style>

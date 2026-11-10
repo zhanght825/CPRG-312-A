@@ -1,164 +1,41 @@
 <script setup>
-import { RouterLink } from 'vue-router'
-const stack = ['Vue.js', 'Express', 'Nginx', 'GitHub Actions']
+import { onMounted, reactive, ref } from 'vue'
+import { api, json } from '../lib/api'
+import { session } from '../lib/session'
+const form = reactive({ name: '', title: '', bio: '', location: '', website: '', github: '', linkedin: '' })
+const editing = ref(false)
+const error = ref('')
+const notice = ref('')
+const loading = ref(true)
+async function load() {
+  try { const data = await api('/portfolio/profile'); Object.assign(form, { name: session.user?.username || '', title: '', bio: '', location: '', website: '', github: '', linkedin: '' }, data) }
+  catch (err) { error.value = err.message }
+  finally { loading.value = false }
+}
+async function save() {
+  error.value = ''; notice.value = ''
+  try { await json('PUT', '/portfolio/profile', { ...form }); editing.value = false; notice.value = 'Profile saved.' }
+  catch (err) { error.value = err.message }
+}
+onMounted(load)
 </script>
-
 <template>
-  <div class="profile">
-    <section class="hero">
-      <div>
-        <p class="label">DEVELOPER PORTFOLIO</p>
-        <h1>Hi, I'm Huitao.<br /><span>I build for the web.</span></h1>
-        <p class="intro">
-          Exploring thoughtful interfaces, reliable APIs, and secure web applications.
-        </p>
-        <RouterLink class="button" to="/projects">Explore projects ↗</RouterLink>
-        <div class="tags">
-          <span v-for="item in stack" :key="item">{{ item }}</span>
-        </div>
+  <div class="stack">
+    <section class="panel hero">
+      <div><p class="eyebrow">DEVELOPER PORTFOLIO</p><h1 class="page-title">Hi, I'm {{ form.name || session.user?.username }}.<br /><span>{{ form.title || 'I build for the web.' }}</span></h1>
+        <p class="muted">{{ form.bio || 'Exploring thoughtful interfaces, reliable APIs, and secure web applications.' }}</p>
+        <p v-if="form.location" class="muted">{{ form.location }}</p>
+        <div class="inline-actions"><a v-if="form.website" :href="form.website" target="_blank" rel="noopener noreferrer">Website ↗</a><a v-if="form.github" :href="form.github" target="_blank" rel="noopener noreferrer">GitHub ↗</a><a v-if="form.linkedin" :href="form.linkedin" target="_blank" rel="noopener noreferrer">LinkedIn ↗</a></div>
       </div>
-      <aside class="card">
-        <div class="avatar">HT</div>
-        <h2>Developer & Learner</h2>
-        <p>Turning new ideas into practical projects, one step at a time.</p>
-        <hr />
-        <small>CURRENT FOCUS</small>
-        <h3>Secure web development</h3>
-        <a href="https://huitaoz.top">huitaoz.top ↗</a>
-      </aside>
+      <aside class="identity"><span class="avatar">{{ (form.name || 'HT').slice(0, 2).toUpperCase() }}</span><h2>Developer & Learner</h2><p>Turning new ideas into practical projects, one step at a time.</p></aside>
     </section>
-    <section class="about">
-      <p class="label">ABOUT THIS PROJECT</p>
-      <h2>From interface to infrastructure.</h2>
-      <p>
-        This portfolio connects a Vue frontend with an Express backend, hosted on Vultr with Nginx
-        and automated deployment through GitHub Actions.
-      </p>
-      <RouterLink to="/skills">Explore my toolkit →</RouterLink>
+    <section class="panel"><div class="row-top"><div><p class="eyebrow">ABOUT THIS PROJECT</p><h2>From interface to infrastructure.</h2><p class="muted">This portfolio connects a Vue frontend with an Express backend, hosted on Vultr with Nginx.</p></div><button class="btn" @click="editing = !editing">{{ editing ? 'Cancel' : 'Edit profile' }}</button></div>
+      <p v-if="notice" class="success">{{ notice }}</p><p v-if="error" class="error">{{ error }}</p>
+      <form v-if="editing" class="edit-grid" @submit.prevent="save">
+        <div v-for="field in ['name','title','location','website','github','linkedin']" :key="field" class="field"><label :for="field">{{ field }}</label><input :id="field" v-model="form[field]" :required="field === 'name'" /></div>
+        <div class="field full"><label for="bio">Biography</label><textarea id="bio" v-model="form.bio" /></div><button class="btn" type="submit">Save changes</button>
+      </form>
     </section>
   </div>
 </template>
-
-<style scoped>
-.profile {
-  color: #182238;
-}
-.hero {
-  display: grid;
-  grid-template-columns: 1.4fr 1fr;
-  gap: 40px;
-  align-items: center;
-}
-.label {
-  color: #6547ce;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.15em;
-}
-h1 {
-  margin: 20px 0;
-  font-size: clamp(36px, 4.8vw, 58px);
-  line-height: 1.12;
-  letter-spacing: -0.05em;
-}
-h1 span {
-  color: #6547ce;
-}
-h2 {
-  font-size: 25px;
-  letter-spacing: -0.03em;
-}
-p {
-  color: #606b80;
-  line-height: 1.85;
-}
-.intro {
-  max-width: 500px;
-  margin-bottom: 26px;
-}
-a {
-  color: #6547ce;
-  text-underline-offset: 4px;
-}
-.button {
-  display: inline-block;
-  padding: 13px 20px;
-  border-radius: 9px;
-  background: #6547ce;
-  color: white;
-  text-decoration: none;
-}
-.button:hover {
-  background: #5236b3;
-}
-.tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 26px;
-}
-.tags span {
-  padding: 5px 10px;
-  border: 1px solid #e2e6ef;
-  border-radius: 6px;
-  font-size: 11px;
-}
-.card {
-  padding: 30px;
-  border: 1px solid #e2e6ef;
-  border-radius: 18px;
-  background: white;
-  box-shadow: 0 16px 40px #18223808;
-}
-.avatar {
-  display: grid;
-  place-items: center;
-  width: 76px;
-  height: 76px;
-  border-radius: 22px;
-  color: #6547ce;
-  background: #efebfc;
-  font-size: 27px;
-  font-weight: 750;
-}
-.card p {
-  font-size: 14px;
-}
-hr {
-  margin: 24px 0;
-  border: 0;
-  border-top: 1px solid #e2e6ef;
-}
-small {
-  color: #606b80;
-  font-size: 10px;
-  letter-spacing: 0.1em;
-}
-h3 {
-  margin: 10px 0 18px;
-  font-size: 17px;
-}
-.about {
-  margin-top: 48px;
-  padding: 30px;
-  border: 1px solid #ded7f2;
-  border-radius: 16px;
-  background: #efebfc;
-}
-.about p {
-  max-width: 760px;
-}
-a:focus-visible {
-  outline: 3px solid #6547ce;
-  outline-offset: 4px;
-}
-@media (max-width: 750px) {
-  .hero {
-    grid-template-columns: 1fr;
-  }
-  .card,
-  .about {
-    padding: 24px;
-  }
-}
-</style>
+<style scoped>.hero{display:grid;grid-template-columns:1.4fr 1fr;gap:32px}.hero h1 span{color:#6547ce}.identity{background:#efebfc;padding:26px;border-radius:14px}.avatar{display:grid;place-items:center;width:68px;height:68px;background:#6547ce;color:white;border-radius:18px;font-size:24px;font-weight:bold}.edit-grid{margin-top:22px;display:grid;grid-template-columns:1fr 1fr;gap:12px}.full{grid-column:1/-1}@media(max-width:700px){.hero,.edit-grid{grid-template-columns:1fr}}</style>

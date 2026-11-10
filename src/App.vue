@@ -1,62 +1,52 @@
 <script setup>
-import { RouterLink, RouterView } from 'vue-router'
-
+import { RouterLink, RouterView, useRouter } from 'vue-router'
+import { session, logout } from './lib/session'
+const router = useRouter()
+const year = new Date().getFullYear()
 const navigation = [
   { label: 'About', path: '/profile' },
   { label: 'Skills', path: '/skills' },
   { label: 'Projects', path: '/projects' },
   { label: 'Status', path: '/health' },
   { label: 'Contact', path: '/contact' },
+  { label: 'Dashboard', path: '/dashboard' },
 ]
-
-const year = new Date().getFullYear()
+async function signOut() {
+  try { await logout() } catch (err) { console.warn(err.message) }
+  await router.push('/login')
+}
 </script>
-
 <template>
   <div class="portfolio">
-    <a class="skip-link" href="#main-content"> Skip to content </a>
-
+    <a class="skip-link" href="#main-content">Skip to content</a>
     <header class="site-header">
       <div class="header-inner">
-        <RouterLink to="/profile" class="brand" aria-label="HT home">
+        <RouterLink to="/profile" class="brand" aria-label="Portfolio home">
           <span class="brand-mark" aria-hidden="true">ht.</span>
-
-          <span class="brand-copy">
-            <strong>Developer Portfolio</strong>
-            <span>Learn. Build. Improve.</span>
-          </span>
+          <span class="brand-copy"><strong>Developer Portfolio</strong><span>Learn. Build. Improve.</span></span>
         </RouterLink>
-
         <nav class="navigation" aria-label="Main navigation">
-          <RouterLink v-for="item in navigation" :key="item.path" :to="item.path" class="nav-link">
-            {{ item.label }}
-          </RouterLink>
+          <template v-if="session.user">
+            <RouterLink v-for="item in navigation" :key="item.path" :to="item.path" class="nav-link">{{ item.label }}</RouterLink>
+            <RouterLink v-if="session.user.role === 'admin'" class="nav-link" to="/admin">Admin</RouterLink>
+            <button class="nav-link signout" type="button" @click="signOut">Logout</button>
+          </template>
+          <template v-else>
+            <RouterLink class="nav-link" to="/login">Login</RouterLink>
+            <RouterLink class="nav-link" to="/register">Register</RouterLink>
+          </template>
         </nav>
       </div>
     </header>
-
-    <main id="main-content" class="main-content" tabindex="-1">
-      <RouterView />
-    </main>
-
-    <footer class="site-footer">
-      <div class="footer-inner">
-        <div class="footer-brand">
-          <span class="footer-mark" aria-hidden="true">ht.</span>
-          <p>Thoughtful code. Continuous learning.</p>
-        </div>
-
-        <div class="footer-meta">
-          <span>© {{ year }} Developer Portfolio</span>
-          <span class="footer-divider" aria-hidden="true">/</span>
-          <span>CPRG 312</span>
-        </div>
-      </div>
-    </footer>
+    <main id="main-content" class="main-content" tabindex="-1"><RouterView /></main>
+    <footer class="site-footer"><div class="footer-inner">
+      <div class="footer-brand"><span class="footer-mark" aria-hidden="true">ht.</span><p>Thoughtful code. Continuous learning.</p></div>
+      <div class="footer-meta"><span>© {{ year }} Developer Portfolio</span><span class="footer-divider" aria-hidden="true">/</span><span>CPRG 312</span></div>
+    </div></footer>
   </div>
 </template>
-
 <style scoped>
+
 .portfolio {
   --color-background: #f6f7fb;
   --color-surface: #ffffff;
@@ -298,4 +288,6 @@ const year = new Date().getFullYear()
     transition: none;
   }
 }
+
+.signout { font: inherit; border: 0; background: none; cursor: pointer; }
 </style>

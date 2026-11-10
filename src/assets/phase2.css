@@ -1,0 +1,28 @@
+:root { font-family: Inter, 'Segoe UI', sans-serif; color: #182238; background: #f6f7fb; }
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; }
+button, input, textarea, select { font: inherit; }
+button { cursor: pointer; }
+input, textarea, select { width: 100%; padding: 11px 12px; border: 1px solid #d6dceb; border-radius: 9px; background: white; }
+textarea { min-height: 110px; resize: vertical; }
+label { display: block; font-weight: 650; font-size: 13px; margin-bottom: 6px; }
+.field { margin-bottom: 17px; }
+.form-card { width: min(520px, 100%); margin: 0 auto; padding: 34px; border: 1px solid #e2e6ef; background: white; border-radius: 18px; box-shadow: 0 16px 45px #18223808; }
+.panel { background: white; border: 1px solid #e2e6ef; border-radius: 16px; padding: 26px; }
+.page-title { font-size: clamp(30px, 4vw, 50px); letter-spacing: -.045em; margin: 8px 0 16px; line-height: 1.1; }
+.muted { color: #606b80; }
+.eyebrow { font-size: 11px; letter-spacing: .16em; font-weight: 700; color: #6547ce; }
+.btn { display: inline-flex; align-items: center; justify-content: center; padding: 11px 18px; border: 1px solid #6547ce; border-radius: 9px; background: #6547ce; color: white; text-decoration: none; font-weight: 650; }
+.btn:hover { background: #5236b3; }
+.btn.ghost { background: white; color: #6547ce; }
+.btn.danger { border-color: #c13f59; background: #c13f59; }
+.btn:disabled { opacity: .65; cursor: progress; }
+.stack { display: grid; gap: 20px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; }
+.inline-actions { display:flex; gap: 9px; flex-wrap: wrap; align-items:center; }
+.error { color: #a2213b; background: #fff0f3; padding: 12px; border-radius: 9px; }
+.success { color: #167452; background: #e8f8f1; padding: 12px; border-radius: 9px; }
+.row-top { display: flex; justify-content: space-between; gap: 15px; align-items: start; }
+.chip { display:inline-block; border-radius: 50px; background: #efebfc; padding: 5px 10px; margin: 4px; color:#6547ce; font-size: 12px; }
+.image-card { width: 100%; height: 180px; object-fit: cover; border-radius: 10px; }
+@media(max-width:650px) { .form-card { padding: 22px; } .row-top { flex-direction: column; } }
